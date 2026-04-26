@@ -9,6 +9,7 @@ class Carta(Base):
     expansion = Column(String)
     precio = Column(Float)
     stock = Column(Integer)
+    categoria = Column(String)
 
 class Usuario(Base):
     __tablename__ = "usuarios"

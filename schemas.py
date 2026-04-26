@@ -5,6 +5,7 @@ class CartaSchema(BaseModel):
     expansion: str
     precio: float
     stock: int
+    categoria: str
 
 class UsuarioSchema(BaseModel):
     email: str
