@@ -180,7 +180,6 @@ def agregar_al_carrito(item: CarritoItemSchema, db: Session = Depends(get_db), u
         raise HTTPException(status_code=404, detail="Carta no encontrada")  
     if carta.stock < item.cantidad:
         raise HTTPException(status_code=400, detail="No hay suficiente stock")
-    carta.stock -= item.cantidad
     carrito_item = models.CarritoItem(
         usuario_id=usuario_actual.id,
         carta_id=item.carta_id,
@@ -199,7 +198,18 @@ def ver_carrito(db: Session = Depends(get_db), usuario_actual: models.Usuario = 
     for item in items:
         carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
         total += carta.precio * item.cantidad
-    return {"carrito": items, "total": total}
+    carrito_detalle = []
+    for item in items:
+        carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
+        carrito_detalle.append({
+            "id": item.id,
+            "carta_id": item.carta_id,
+            "nombre": carta.nombre,
+            "cantidad": item.cantidad,
+            "precio": carta.precio
+        })
+
+    return {"carrito": carrito_detalle, "total": total}
 
 #borra items del carrito por su ID, pero solo si el item pertenece al usuario actual, para evitar que borren cosas de otros usuarios, aunque eso no debería pasar porque el token JWT solo les da acceso a su propio carrito, pero por si las moscas.
 @app.delete("/carrito/{item_id}")
@@ -248,6 +258,11 @@ def crear_orden(db: Session = Depends(get_db), usuario_actual: models.Usuario = 
         db.add(orden_item)
 
     db.commit()
+    
+    # Descontar el stock
+    for item in items:
+        carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
+        carta.stock -= item.cantidad
 
     # Limpiar el carrito
     for item in items:

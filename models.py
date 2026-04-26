@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
 from database import Base 
 
 class Carta(Base):
@@ -23,15 +23,15 @@ class CarritoItem(Base):
     __tablename__ = "carrito_items"
 
     id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer)
-    carta_id = Column(Integer)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
+    carta_id = Column(Integer, ForeignKey("cartas.id"))
     cantidad = Column(Integer)
 
 class Orden(Base):
     __tablename__ = "ordenes"
 
     id = Column(Integer, primary_key=True, index=True)
-    usuario_id = Column(Integer)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"))
     fecha = Column(String)
     total = Column(Float) 
 
@@ -39,7 +39,7 @@ class OrdenItem(Base):
     __tablename__ = "orden_items"
 
     id= Column(Integer, primary_key=True, index=True)
-    orden_id = Column(Integer)
-    carta_id = Column(Integer)
+    orden_id = Column(Integer, ForeignKey("ordenes.id"))
+    carta_id = Column(Integer, ForeignKey("cartas.id"))
     cantidad = Column(Integer)
     precio_unitario = Column(Float)
