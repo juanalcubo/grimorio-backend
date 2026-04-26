@@ -261,5 +261,3 @@ def historial_ordenes(usuario_id: int, db: Session = Depends(get_db), usuario_ac
             })
         return {"historial_ordenes": historial}
 
-
-
