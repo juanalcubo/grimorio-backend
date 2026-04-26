@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 import models
 from database import engine, SessionLocal
-from schemas import CartaSchema, UsuarioSchema, CarritoItemSchema, CambiarEmailSchema, CambiarPasswordSchema
+from schemas import CartaSchema, CartaActualizarSchema, UsuarioSchema, CarritoItemSchema, CambiarEmailSchema, CambiarPasswordSchema
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
@@ -106,17 +106,23 @@ def eliminar_carta(carta_id: int, db: Session = Depends(get_db), usuario_actual:
 #ruta para actualizar una carta por su ID
 
 @app.put("/cartas/{carta_id}")
-def actualizar_carta(carta_id: int, carta_actualizada: CartaSchema, db: Session = Depends(get_db), usuario_actual: models.Usuario = Depends(obtener_usuario_actual)):
+def actualizar_carta(carta_id: int, carta_actualizada: CartaActualizarSchema, db: Session = Depends(get_db), usuario_actual: models.Usuario = Depends(obtener_usuario_actual)):
     if not usuario_actual.es_admin:
         raise HTTPException(status_code=403, detail="No tienes permiso")
 
     carta = db.query(models.Carta).filter(models.Carta.id == carta_id).first()
     if carta:
-        carta.nombre = carta_actualizada.nombre
-        carta.expansion = carta_actualizada.expansion
-        carta.precio = carta_actualizada.precio
-        carta.stock = carta_actualizada.stock
-        carta.categoria = carta_actualizada.categoria
+        # Actualizar solo los campos que se enviaron
+        if carta_actualizada.nombre is not None:
+            carta.nombre = carta_actualizada.nombre
+        if carta_actualizada.expansion is not None:
+            carta.expansion = carta_actualizada.expansion
+        if carta_actualizada.precio is not None:
+            carta.precio = carta_actualizada.precio
+        if carta_actualizada.stock is not None:
+            carta.stock = carta_actualizada.stock
+        if carta_actualizada.categoria is not None:
+            carta.categoria = carta_actualizada.categoria
         db.commit()
         db.refresh(carta)
         return {"mensaje": "Carta actualizada con éxito", "carta": carta}   
@@ -134,7 +140,7 @@ def registrar_usuario(usuario: UsuarioSchema, db: Session = Depends(get_db)):
     db.add(nuevo_usuario)
     db.commit()
     db.refresh(nuevo_usuario)
-    return {"mensaje": "Usuario registrado, Todo fino", "usuario": nuevo_usuario}
+    return {"mensaje": "Usuario registrado exitosamente!", "usuario": nuevo_usuario}
 
 # Función para crear un token JWT
 
@@ -154,7 +160,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
     if not pwd_context.verify(form_data.password, db_usuario.password):
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")
-    token = crear_token({"sub": db_usuario.email})
+    token = crear_token({"sub": db_usuario.email, "usuario_id": db_usuario.id})
     return {"access_token": token, "token_type": "bearer", "usuario_id": db_usuario.id}
 
     
@@ -230,53 +236,61 @@ def crear_orden(db: Session = Depends(get_db), usuario_actual: models.Usuario = 
     if not items:
         raise HTTPException(status_code=400, detail="El carrito está vacío")
     
-    # Calcular el total
-    total = 0
-    for item in items:
-        carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
-        total += carta.precio * item.cantidad
-    
-    # Crear la orden UNA sola vez
-    nueva_orden = models.Orden(
-        usuario_id=usuario_actual.id,
-        fecha=datetime.utcnow().isoformat(),
-        total=total
-    )
-    db.add(nueva_orden)
-    db.commit()
-    db.refresh(nueva_orden)
-
-    # Crear los items de la orden
-    for item in items:
-        carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
-        orden_item = models.OrdenItem(
-            orden_id=nueva_orden.id,
-            carta_id=item.carta_id,
-            cantidad=item.cantidad,
-            precio_unitario=carta.precio
+    try:
+        # Calcular el total
+        total = 0
+        for item in items:
+            carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
+            total += carta.precio * item.cantidad
+        
+        # Crear la orden UNA sola vez
+        nueva_orden = models.Orden(
+            usuario_id=usuario_actual.id,
+            fecha=datetime.utcnow().isoformat(),
+            total=total
         )
-        db.add(orden_item)
+        db.add(nueva_orden)
+        db.flush()  # Obtener el ID sin commit
 
-    db.commit()
+        # Crear los items de la orden
+        for item in items:
+            carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
+            orden_item = models.OrdenItem(
+                orden_id=nueva_orden.id,
+                carta_id=item.carta_id,
+                cantidad=item.cantidad,
+                precio_unitario=carta.precio
+            )
+            db.add(orden_item)
 
-    # Descontar el stock
-    for item in items:
-        carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
-        carta.stock -= item.cantidad
+        # Descontar el stock
+        for item in items:
+            carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
+            carta.stock -= item.cantidad
 
-    # Limpiar el carrito
-    for item in items:
-        db.delete(item)
+        # Limpiar el carrito
+        for item in items:
+            db.delete(item)
 
-    db.commit()
+        db.commit()  # Confirmar todo
+        return {"mensaje": "Orden creada con éxito", "orden_id": nueva_orden.id, "total": total}
+    
+    except Exception as e:
+        db.rollback()  # Deshacer todo si algo falla
+        raise HTTPException(status_code=500, detail=f"Error al crear la orden: {str(e)}")
 
-    return {"mensaje": "Orden creada con éxito", "orden_id": nueva_orden.id, "total": total}
-
-@app.get("/history_ordenes/{usuario_id}")
-def historial_ordenes(usuario_id: int, db: Session = Depends(get_db), usuario_actual: models.Usuario = Depends(obtener_usuario_actual)):
+@app.get("/historial_ordenes/{usuario_id}")
+def historial_ordenes(usuario_id: int, pagina: int = 1, por_pagina: int = 20, db: Session = Depends(get_db), usuario_actual: models.Usuario = Depends(obtener_usuario_actual)):
         if usuario_actual.id != usuario_id and not usuario_actual.es_admin:
             raise HTTPException(status_code=403, detail="No tienes permiso para ver este historial")
-        ordenes = db.query(models.Orden).filter(models.Orden.usuario_id == usuario_id).all()
+        
+        # Paginación
+        offset = (pagina - 1) * por_pagina
+        ordenes = db.query(models.Orden).filter(models.Orden.usuario_id == usuario_id).limit(por_pagina).offset(offset).all()
+        
+        # Contar total de órdenes para metadata de paginación
+        total_ordenes = db.query(models.Orden).filter(models.Orden.usuario_id == usuario_id).count()
+        
         historial = []
         for orden in ordenes:
             items = db.query(models.OrdenItem).filter(models.OrdenItem.orden_id == orden.id).all()
@@ -284,7 +298,14 @@ def historial_ordenes(usuario_id: int, db: Session = Depends(get_db), usuario_ac
                 "orden": orden,
                 "items": items
             })
-        return {"historial_ordenes": historial}
+        
+        return {
+            "historial_ordenes": historial,
+            "pagina": pagina,
+            "por_pagina": por_pagina,
+            "total": total_ordenes,
+            "total_paginas": (total_ordenes + por_pagina - 1) // por_pagina
+        }
 
 @app.put("/usuarios/cambiar-password")
 def cambiar_password(datos: CambiarPasswordSchema, db: Session = Depends(get_db), usuario_actual: models.Usuario = Depends(obtener_usuario_actual)):

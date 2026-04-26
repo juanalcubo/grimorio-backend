@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 
 class CartaSchema(BaseModel):
     nombre: str
@@ -7,8 +7,15 @@ class CartaSchema(BaseModel):
     stock: int
     categoria: str
 
+class CartaActualizarSchema(BaseModel):
+    nombre: str | None = None
+    expansion: str | None = None
+    precio: float | None = None
+    stock: int | None = None
+    categoria: str | None = None
+
 class UsuarioSchema(BaseModel):
-    email: str
+    email: EmailStr
     password: str
 
 class CarritoItemSchema(BaseModel):
