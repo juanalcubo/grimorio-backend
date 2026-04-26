@@ -66,7 +66,7 @@ def obtener_usuario_actual(token: str = Depends(oauth2_scheme), db: Session = De
 def crear_carta(carta: CartaSchema, db: Session = Depends(get_db), usuario_actual: models.Usuario = Depends(obtener_usuario_actual)):
     if not usuario_actual.es_admin:
         raise HTTPException(status_code=403, detail="No tienes permiso")
-    nueva_carta = models.Carta(nombre=carta.nombre, expansion=carta.expansion, precio=carta.precio, stock=carta.stock)
+    nueva_carta = models.Carta(nombre=carta.nombre, expansion=carta.expansion, precio=carta.precio, stock=carta.stock, categoria=carta.categoria)
     db.add(nueva_carta)
     db.commit() # Esto guarda los cambios de verdad
     db.refresh(nueva_carta) # Esto actualiza la info con el ID que le puso la DB
@@ -116,6 +116,7 @@ def actualizar_carta(carta_id: int, carta_actualizada: CartaSchema, db: Session 
         carta.expansion = carta_actualizada.expansion
         carta.precio = carta_actualizada.precio
         carta.stock = carta_actualizada.stock
+        carta.categoria = carta_actualizada.categoria
         db.commit()
         db.refresh(carta)
         return {"mensaje": "Carta actualizada con éxito", "carta": carta}   
