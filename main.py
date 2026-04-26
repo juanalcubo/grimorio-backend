@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
 import models
 from database import engine, SessionLocal
-from schemas import CartaSchema, UsuarioSchema, CarritoItemSchema
+from schemas import CartaSchema, UsuarioSchema, CarritoItemSchema, CambiarEmailSchema, CambiarPasswordSchema
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta
@@ -285,4 +285,21 @@ def historial_ordenes(usuario_id: int, db: Session = Depends(get_db), usuario_ac
                 "items": items
             })
         return {"historial_ordenes": historial}
+
+@app.put("/usuarios/cambiar-password")
+def cambiar_password(datos: CambiarPasswordSchema, db: Session = Depends(get_db), usuario_actual: models.Usuario = Depends(obtener_usuario_actual)):
+    if not pwd_context.verify(datos.password_actual, usuario_actual.password):
+        raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
+    usuario_actual.password = pwd_context.hash(datos.password_nueva)
+    db.commit()
+    return {"mensaje": "Contraseña actualizada con éxito"}
+
+@app.put("/usuarios/cambiar-email")
+def cambiar_email(datos: CambiarEmailSchema, db: Session = Depends(get_db), usuario_actual: models.Usuario = Depends(obtener_usuario_actual)):
+    email_existente = db.query(models.Usuario).filter(models.Usuario.email == datos.email_nuevo).first()
+    if email_existente:
+        raise HTTPException(status_code=400, detail="El email ya está en uso")
+    usuario_actual.email = datos.email_nuevo
+    db.commit()
+    return {"mensaje": "Email actualizado con éxito"}
 

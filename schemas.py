@@ -13,4 +13,11 @@ class UsuarioSchema(BaseModel):
 
 class CarritoItemSchema(BaseModel):
     carta_id: int
-    cantidad: int    
+    cantidad: int
+
+class CambiarPasswordSchema(BaseModel):
+    password_actual: str
+    password_nueva: str
+
+class CambiarEmailSchema(BaseModel):
+    email_nuevo: str    
