@@ -155,7 +155,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
     if not pwd_context.verify(form_data.password, db_usuario.password):
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")
     token = crear_token({"sub": db_usuario.email})
-    return {"access_token": token, "token_type": "bearer"}
+    return {"access_token": token, "token_type": "bearer", "usuario_id": db_usuario.id}
 
     
 # RUTA PARA HACER ADMIN A UN USUARIO (SOLO ADMINS PUEDEN HACER ESTO)
@@ -258,7 +258,7 @@ def crear_orden(db: Session = Depends(get_db), usuario_actual: models.Usuario = 
         db.add(orden_item)
 
     db.commit()
-    
+
     # Descontar el stock
     for item in items:
         carta = db.query(models.Carta).filter(models.Carta.id == item.carta_id).first()
