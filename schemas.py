@@ -27,4 +27,4 @@ class CambiarPasswordSchema(BaseModel):
     password_nueva: str
 
 class CambiarEmailSchema(BaseModel):
-    email_nuevo: str    
+    email_nuevo: EmailStr
